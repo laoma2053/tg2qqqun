@@ -1,0 +1,69 @@
+# NapCat + tg2qqqun 组合部署（推荐给“未安装 NapCat 的用户”）
+#
+# 参考文档：
+# - https://github.com/NapNeko/NapCat-Docker
+# - DockerHub: https://hub.docker.com/r/mlikiowa/napcat-docker
+#
+# 关键点：
+# 1) tg2qqqun 会把 TG 图片保存到宿主机：/home/tg2qqqun/data/tg_media
+# 2) NapCat 必须能在容器内通过 /AstrBot/data/tg_media 读取到这些图片
+#    因为 tg2qqqun 发图使用：file:///AstrBot/data/tg_media/<file>
+
+version: "3"
+
+services:
+  # tg2qqqun（本项目）
+  tg2qq:
+    build: ../app
+    container_name: tg2qq
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ../config:/config
+      - ../session:/session
+      - /home/tg2qqqun/data/tg_media:/host_tg_media
+      - /etc/localtime:/etc/localtime:ro
+
+  # NapCat（官方 Docker 版）
+  napcat:
+    image: mlikiowa/napcat-docker:latest
+    container_name: napcat
+    restart: always
+    network_mode: bridge
+    environment:
+      # 官方文档要求：用于处理挂载目录权限
+      - NAPCAT_UID=${NAPCAT_UID}
+      - NAPCAT_GID=${NAPCAT_GID}
+      - TZ=Asia/Shanghai
+
+    # 官方文档端口：
+    # - 3000/3001：OneBot/HTTP 相关（具体以你在 WebUI 中启用的协议为准）
+    # - 6099：WebUI
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+      - "6099:6099"
+
+    volumes:
+      # （可选）NapCat 持久化数据：/AstrBot/data
+      - ./data:/AstrBot/data
+
+      # 官方文档：QQ 持久化数据路径
+      - ./ntqq:/app/.config/QQ
+
+      # 官方文档：NapCat 配置文件路径
+      - ./napcat/config:/app/napcat/config
+
+      # 本项目适配：让 NapCat 读取 tg2qq 保存的图片（建议只读）
+      - /home/tg2qqqun/data/tg_media:/AstrBot/data/tg_media:ro
+      - /etc/localtime:/etc/localtime:ro
+
+# 使用方式（在 napcat/ 目录执行）：
+# 1) 导出 UID/GID（官方文档）：
+#    NAPCAT_UID=$(id -u) NAPCAT_GID=$(id -g) docker compose up -d
+# 2) 打开 WebUI：
+#    http://<宿主机IP>:6099/webui
+# 3) 在 WebUI 启用/配置 OneBot v11 HTTP，并设置 token
+# 4) 将本项目 config/config.yaml 的 qq.onebot_base_url/qq.token 配置为 NapCat 提供的 HTTP 地址与 token

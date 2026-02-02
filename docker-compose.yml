@@ -1,0 +1,13 @@
+services:
+  tg2qq:
+    build: ./app
+    container_name: tg2qq
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./config:/config
+      - ./session:/session
+      - /home/tg2qqqun/data/tg_media:/host_tg_media
+      - /etc/localtime:/etc/localtime:ro

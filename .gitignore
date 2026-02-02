@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Telethon session / local runtime data
+session/
+*.session
+
+# Runtime media files
+/home/tg2qqqun/data/
+data/
+
+# Local config with secrets
+config/config.yaml
+
+# SQLite
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
