@@ -52,6 +52,22 @@ class OneBotClient:
         }
         return await self.call("send_group_msg", payload)
 
+    async def send_group_image_text(self, group_id: int, image_file: str, text: str) -> dict[str, Any]:
+        """发送普通图文消息到群（非合并转发）。
+
+        - image_file: NapCat 容器内可访问的 file:// 路径
+          例如：file:///AstrBot/data/tg_media/xxxx.jpg
+        - OneBot v11：message 为消息段数组，按顺序拼接展示
+        """
+        payload = {
+            "group_id": group_id,
+            "message": [
+                {"type": "image", "data": {"file": image_file}},
+                {"type": "text", "data": {"text": text}},
+            ],
+        }
+        return await self.call("send_group_msg", payload)
+
     async def send_group_forward(self, group_id: int, uin: int, name: str, image_file: str, text: str) -> dict[str, Any]:
         """
         发送合并转发消息（重点：图片在上，文字在下）

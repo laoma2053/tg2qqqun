@@ -204,7 +204,8 @@ async def main():
             log.info("dropped by rules: chat_id=%s msg_id=%s", ev.chat_id, message.id)
             return
 
-        final_text = f"[TG:{m.chat}] {m.date}\n\n{m.text}".strip()
+        # 仅发送清洗后的正文（不加 [TG:xxx] / 时间头）
+        final_text = (m.text or "").strip()
 
         if message.photo:
             try:
@@ -222,22 +223,31 @@ async def main():
 
                     image_file = "file://" + os.path.join(napcat_media_dir, filename)
 
-                    # 多群发送：单群失败不影响其它群
+                    # 多群发送：优先普通图文消息；失败则降级为合并转发（更稳）
                     for gid in group_ids:
                         try:
-                            await ob.send_group_forward(
+                            await ob.send_group_image_text(
                                 group_id=gid,
-                                uin=bot_uin,
-                                name=forward_name,
                                 image_file=image_file,
                                 text=final_text,
                             )
-                            log.info("sent forward: group_id=%s file=%s", gid, image_file)
+                            log.info("sent image+text: group_id=%s file=%s", gid, image_file)
                         except Exception:
-                            log.exception("send forward failed: group_id=%s", gid)
+                            log.exception("send image+text failed (fallback to forward): group_id=%s", gid)
+                            try:
+                                await ob.send_group_forward(
+                                    group_id=gid,
+                                    uin=bot_uin,
+                                    name=forward_name,
+                                    image_file=image_file,
+                                    text=final_text,
+                                )
+                                log.info("sent forward (fallback): group_id=%s file=%s", gid, image_file)
+                            except Exception:
+                                log.exception("send forward failed: group_id=%s", gid)
                     return
                 except Exception:
-                    log.exception("prepare forward failed")
+                    log.exception("prepare image message failed")
                     return
 
         # 无图：多群发送，单群失败不影响其它群
