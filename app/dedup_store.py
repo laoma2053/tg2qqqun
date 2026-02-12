@@ -41,14 +41,27 @@ class DedupStore:
 
     def seen_or_mark(self, key: str) -> bool:
         """Return True if key already seen; else insert and return False."""
+        if self.seen(key):
+            return True
+        self.mark(key)
+        return False
+
+    def seen(self, key: str) -> bool:
+        """Return True if key exists in store."""
+        with self._conn() as conn:
+            cur = conn.execute("SELECT 1 FROM dedup WHERE k = ? LIMIT 1", (key,))
+            return cur.fetchone() is not None
+
+    def mark(self, key: str) -> bool:
+        """Insert key if absent. Returns True if inserted, False if existed."""
         now = int(time.time())
         with self._conn() as conn:
-            try:
-                conn.execute("INSERT INTO dedup (k, ts) VALUES (?, ?)", (key, now))
-                conn.commit()
-                return False
-            except sqlite3.IntegrityError:
-                return True
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO dedup (k, ts) VALUES (?, ?)",
+                (key, now),
+            )
+            conn.commit()
+            return int(cur.rowcount) > 0
 
     def prune(self) -> int:
         """Prune old records if ttl_seconds > 0. Returns deleted rows."""

@@ -18,12 +18,23 @@ telegram:
 qq:
   onebot_base_url: "http://127.0.0.1:3000"
   token: "CHANGE_ME"            # 你的 NapCat HTTP token
+  request_timeout_seconds: 60
+  # 每条转发消息的最小发送间隔（秒），用于降低突发发送风控风险
+  send_interval_seconds: 10
 
   # 转发消息 到目标QQ群：填一个或多个群号。
   # 每条消息会尽量发到所有群，单群失败不影响其它群。
   group_ids: [963115963]
   # 或
   # group_ids: [963115963, 123456789]  # 多群
+
+  # OneBot HTTP 调用重试（仅对超时/连接失败/429/5xx 自动重试）
+  retry:
+    enabled: true
+    max_attempts: 3
+    base_delay_ms: 500
+    max_delay_ms: 5000
+    jitter_ms: 200
 
 
 storage:
@@ -49,6 +60,10 @@ dedup:
   db_path: "/session/dedup.sqlite3"
   # 可选：自动过期（秒）。0 表示不自动过期
   ttl_seconds: 0
+  # 去重标记时机：
+  # - success：至少一个目标群发送成功后才标记（推荐，避免发送失败导致漏发）
+  # - receive：接收到消息即标记（旧行为）
+  mark_on: "success"
 
 rules:
   transforms:
@@ -62,17 +77,22 @@ rules:
       # require_allows=true 时，必须命中 allow_keywords/allow_regex 才会通过
       require_allows: true
 
-    # (1) 删除：从“📤 资源链接”开始一直到结尾（覆盖私聊导流/投稿/频道群组/广告合作等）
+    # (1) 将首行前缀“名称：”替换为“🎬 已更新：”
+    - type: "regex_replace"
+      pattern: "^名称[:：]\\s*"
+      repl: "🎬 已更新："
+
+    # (2) 删除：从“📤 资源链接”开始一直到结尾（覆盖私聊导流/投稿/频道群组/广告合作等）
     - type: "regex_replace"
       pattern: "(?s)📤\\s*资源链接[\\s\\S]*$"
       repl: ""
 
-    # (2) 多空行收敛：3个以上换行 -> 2个换行
+    # (3) 多空行收敛：3个以上换行 -> 2个换行
     - type: "regex_replace"
       pattern: "\\n{3,}"
       repl: "\n\n"
 
-    # (3) 追加你自己的资源说明模板，并自动提取 {title}
+    # (4) 追加你自己的资源说明模板，并自动提取 {title}
     - type: "append_dynamic"
       template: |
         📤 资源链接：

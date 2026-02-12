@@ -177,7 +177,15 @@ WebUI：`http://<宿主机IP>:6099/webui`
 ### qq
 - `onebot_base_url`：NapCat OneBot HTTP 地址（默认 `http://127.0.0.1:3000`）
 - `token`：HTTP token（请求头 `Authorization: Bearer <token>`）
+- `request_timeout_seconds`：OneBot HTTP 请求超时（秒），默认 `60`
+- `send_interval_seconds`：每条转发消息最小发送间隔（秒），默认 `10`
 - `group_ids`：目标 QQ 群号列表（非空）。每条消息会“尽量发到所有群”，单群失败不影响其它群。
+- `retry`：OneBot 调用重试策略（默认开启）
+  - `enabled`：是否启用重试
+  - `max_attempts`：最大尝试次数（含首次）
+  - `base_delay_ms`：指数退避基础延迟
+  - `max_delay_ms`：最大退避延迟
+  - `jitter_ms`：随机抖动，降低瞬时重试风暴
 
 ### storage
 - `host_media_dir_in_container`：tg2qq 容器内写入目录（保存 TG 图片），默认 `/host_tg_media`
@@ -195,6 +203,9 @@ WebUI：`http://<宿主机IP>:6099/webui`
 - `enabled`
 - `db_path`：默认 `/session/dedup.sqlite3`
 - `ttl_seconds`：可选；0 表示不过期
+- `mark_on`：去重标记时机
+  - `success`：至少一个目标群发送成功后再标记（默认，避免发送失败导致漏发）
+  - `receive`：接收消息即标记（旧行为）
 
 ### rules.transforms（文本清洗流水线）
 按顺序执行的 transforms。
@@ -266,8 +277,9 @@ WebUI：`http://<宿主机IP>:6099/webui`
 ### Q：如何确认已成功转发到所有群？
 查看 `docker logs -f tg2qq`：
 - 每条 TG 新消息会先出现：`incoming: ...`
-- 发送成功会出现：`sent text: group_id=...` 或 `sent forward: group_id=...`
-- 某个群失败会出现：`send ... failed: group_id=...`（但其它群仍会继续发送）
+- 每个目标群都会输出一条 `send_result ...`，包含：
+  - `chat_id/msg_id/group_id/send_mode/attempt/result/error_type`
+  - `result=success` 表示该群发送成功，`result=failed` 表示该群本次发送失败（不影响其它群）
 
 ---
 
@@ -278,6 +290,11 @@ WebUI：`http://<宿主机IP>:6099/webui`
 - `session/telegram.session`
 - `session/dedup.sqlite3`
 - `data/tg_media/` 下的媒体文件
+
+运维建议：
+- 定期轮换 `telegram.api_hash` 与 `qq.token`（如每 30~90 天，或疑似泄露后立即轮换）
+- NapCat HTTP token 使用高强度随机串，且仅暴露到必需网段
+- 将配置目录权限收敛到最小可用（只允许运行账户读写）
 
 仓库已提供：
 - `config/config.example.yaml`（示例配置）
