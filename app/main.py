@@ -65,10 +65,12 @@ def _meta_from_resp(resp: dict | None) -> tuple[int, int]:
     return attempts, duration_ms
 
 
-def _meta_from_exc(exc: Exception) -> tuple[int, str]:
+def _meta_from_exc(exc: Exception) -> tuple[int, str, str]:
+    """Return (attempts, error_type, detail) from an exception."""
     if isinstance(exc, OneBotRequestError):
-        return max(int(exc.attempts or 1), 1), exc.error_type
-    return 1, exc.__class__.__name__
+        detail = (exc.detail or str(exc))[:500]
+        return max(int(exc.attempts or 1), 1), exc.error_type, detail
+    return 1, exc.__class__.__name__, str(exc)[:500]
 
 
 def _log_send_result(
@@ -81,10 +83,11 @@ def _log_send_result(
     attempt: int,
     result: str,
     error_type: str,
+    error_detail: str = "",
     duration_ms: int = -1,
 ) -> None:
     log.info(
-        "send_result chat_id=%s msg_id=%s group_id=%s send_mode=%s attempt=%s result=%s error_type=%s duration_ms=%s",
+        "send_result chat_id=%s msg_id=%s group_id=%s send_mode=%s attempt=%s result=%s error_type=%s duration_ms=%s detail=%s",
         chat_id,
         msg_id,
         group_id,
@@ -93,6 +96,7 @@ def _log_send_result(
         result,
         error_type,
         duration_ms,
+        error_detail or "-",
     )
 
 
@@ -419,7 +423,7 @@ async def main():
                             )
                             continue
                         except Exception as e:
-                            attempts, error_type = _meta_from_exc(e)
+                            attempts, error_type, error_detail = _meta_from_exc(e)
                             _log_send_result(
                                 log,
                                 chat_id=int(ev.chat_id),
@@ -429,6 +433,7 @@ async def main():
                                 attempt=attempts,
                                 result="failed",
                                 error_type=error_type,
+                                error_detail=error_detail,
                             )
                             try:
                                 resp = await ob.send_group_forward(
@@ -452,7 +457,7 @@ async def main():
                                     duration_ms=duration_ms,
                                 )
                             except Exception as e2:
-                                attempts, error_type = _meta_from_exc(e2)
+                                attempts, error_type, error_detail = _meta_from_exc(e2)
                                 _log_send_result(
                                     log,
                                     chat_id=int(ev.chat_id),
@@ -462,6 +467,7 @@ async def main():
                                     attempt=attempts,
                                     result="failed",
                                     error_type=error_type,
+                                    error_detail=error_detail,
                                 )
                     if dedup is not None and dedup_mark_on == "success":
                         if any_send_success:
@@ -495,7 +501,7 @@ async def main():
                     duration_ms=duration_ms,
                 )
             except Exception as e:
-                attempts, error_type = _meta_from_exc(e)
+                attempts, error_type, error_detail = _meta_from_exc(e)
                 _log_send_result(
                     log,
                     chat_id=int(ev.chat_id),
@@ -505,6 +511,7 @@ async def main():
                     attempt=attempts,
                     result="failed",
                     error_type=error_type,
+                    error_detail=error_detail,
                 )
 
         if dedup is not None and dedup_mark_on == "success":
