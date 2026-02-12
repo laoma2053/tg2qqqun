@@ -1,7 +1,7 @@
 services:
   tg2qq:
     build: ./app
-    container_name: tg2qq
+    container_name: tg2qqQun
     network_mode: host
     restart: unless-stopped
     environment:

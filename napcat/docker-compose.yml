@@ -15,7 +15,7 @@ services:
   # tg2qqqun（本项目）
   tg2qq:
     build: ../app
-    container_name: tg2qq
+    container_name: tg2qqQun
     network_mode: host
     restart: unless-stopped
     environment:
@@ -57,7 +57,7 @@ services:
       - ./napcat/config:/app/napcat/config
 
       # 本项目适配：让 NapCat 读取 tg2qq 保存的图片（建议只读）
-      - /home/tg2qqqun/data/tg_media:/AstrBot/data/tg_media:ro
+      - ./data/tg_media:/AstrBot/data/tg_media:ro
       - /etc/localtime:/etc/localtime:ro
 
 # 使用方式（在 napcat/ 目录执行）：

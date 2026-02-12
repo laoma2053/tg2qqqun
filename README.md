@@ -1,4 +1,4 @@
-# tg2qqqun
+# tg2qqQun
 
 一个将指定 **Telegram 公共频道**的新消息转发到 **QQ 群** 的小工具，基于：
 - Telegram：Telethon
