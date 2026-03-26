@@ -86,8 +86,10 @@ def _log_send_result(
     error_detail: str = "",
     duration_ms: int = -1,
 ) -> None:
+    emoji = "✅" if result == "success" else "❌"
     log.info(
-        "send_result chat_id=%s msg_id=%s group_id=%s send_mode=%s attempt=%s result=%s error_type=%s duration_ms=%s detail=%s",
+        "%s 发送结果: chat_id=%s msg_id=%s 群=%s 模式=%s 尝试=%s 结果=%s 错误=%s 耗时=%sms 详情=%s",
+        emoji,
         chat_id,
         msg_id,
         group_id,
@@ -204,7 +206,7 @@ async def main():
         dedup_mark_on = "success"
 
     log.info(
-        "starting... onebot_base_url=%s source_count=%s skipped_sources=%s group_count=%s retry_enabled=%s retry_max_attempts=%s request_timeout_seconds=%s send_interval_seconds=%s dedup_enabled=%s dedup_mark_on=%s dedup_ttl_seconds=%s",
+        "🚀 启动中... OneBot地址=%s TG来源数=%s 跳过来源=%s 目标群数=%s 重试=%s 最大重试=%s 超时=%ss 发送间隔=%ss 去重=%s 去重时机=%s TTL=%ss",
         qq_cfg.get("onebot_base_url"),
         len(sources),
         skipped_sources,
@@ -218,7 +220,7 @@ async def main():
         dedup_ttl_seconds,
     )
     if skipped_sources > 0:
-        log.warning("ignored invalid telegram.sources entries: %s", skipped_sources)
+        log.warning("⚠️ 忽略了 %s 个无效的 TG 来源配置", skipped_sources)
 
     # 1) 初始化 OneBot 客户端 & 获取当前登录 QQ 的 uin（forward node 要用）
     ob = OneBotClient(
@@ -229,9 +231,9 @@ async def main():
     )
     try:
         bot_uin = await ob.get_login_uin()
-        log.info("onebot ok: bot_uin=%s", bot_uin)
+        log.info("✅ OneBot 连接成功: QQ号=%s", bot_uin)
     except Exception:
-        log.exception("onebot get_login_info failed (check base_url/token and napcat http server)")
+        log.exception("❌ OneBot 连接失败 (检查 base_url/token 和 NapCat HTTP 服务)")
         raise
 
     # 2) 初始化 Telegram 客户端（Telethon）
@@ -240,13 +242,13 @@ async def main():
         await client.start()
         me = await client.get_me()
         log.info(
-            "telegram ok: me_id=%s username=%s phone=%s",
+            "✅ Telegram 连接成功: ID=%s 用户名=%s 手机=%s",
             getattr(me, "id", None),
             getattr(me, "username", None),
             getattr(me, "phone", None),
         )
     except Exception:
-        log.exception("telegram start failed (check api_id/api_hash/session and interactive login)")
+        log.exception("❌ Telegram 启动失败 (检查 api_id/api_hash/session 和交互式登录)")
         raise
 
     # 3) 解析 sources 为 entity，避免每条消息重复 resolve
@@ -261,16 +263,16 @@ async def main():
         except Exception as e:
             resolve_failed += 1
             log.warning(
-                "skip unresolved source: source=%r error_type=%s",
+                "⚠️ 跳过无法解析的来源: %r 错误=%s",
                 src,
                 e.__class__.__name__,
             )
 
     if resolve_failed > 0:
-        log.warning("sources resolved with failures: failed=%s total=%s", resolve_failed, len(sources))
+        log.warning("⚠️ 来源解析完成但有失败: 失败=%s 总数=%s", resolve_failed, len(sources))
     if not entities:
-        raise RuntimeError("no resolvable telegram.sources left after validation")
-    log.info("sources resolved:{ %s }", ",".join(resolved_sources))
+        raise RuntimeError("❌ 没有可用的 TG 来源")
+    log.info("✅ TG 来源已解析: %s", ", ".join(resolved_sources))
 
     send_limiter = SendIntervalLimiter(send_interval_seconds)
 
@@ -285,13 +287,13 @@ async def main():
         try:
             dedup.prune()
             log.info(
-                "dedup enabled: db=%s ttl_seconds=%s mark_on=%s",
+                "✅ 去重已启用: 数据库=%s TTL=%ss 标记时机=%s",
                 dedup_db_path,
                 dedup_ttl_seconds,
                 dedup_mark_on,
             )
         except Exception:
-            log.exception("dedup prune failed")
+            log.exception("❌ 去重清理失败")
 
     # 媒体清理：定期删除过期图片
     try:
@@ -308,14 +310,13 @@ async def main():
         )
         asyncio.create_task(cleanup_loop(mr))
         log.info(
-            "media_retention enabled=%s dir=%s keep_days=%s interval_hours=%s",
-            mr.enabled,
+            "🗑️ 媒体清理已启用: 目录=%s 保留=%s天 间隔=%s小时",
             mr.dir_in_container,
             mr.keep_days,
             mr.interval_hours,
         )
     except Exception:
-        log.exception("media_retention task start failed (ignored)")
+        log.exception("⚠️ 媒体清理任务启动失败 (已忽略)")
 
     @client.on(events.NewMessage(chats=entities))
     async def handler(ev: events.NewMessage.Event):
@@ -326,13 +327,13 @@ async def main():
         if dedup is not None:
             try:
                 if dedup.seen(dkey):
-                    log.debug("dedup drop: %s", dkey)
+                    log.debug("🔁 去重跳过: %s", dkey)
                     return
                 if dedup_mark_on == "receive":
                     dedup.mark(dkey)
-                    log.debug("dedup marked on receive: %s", dkey)
+                    log.debug("✅ 去重已标记(接收时): %s", dkey)
             except Exception:
-                log.exception("dedup pre-check failed (ignored)")
+                log.exception("⚠️ 去重预检查失败 (已忽略)")
 
         raw_text = (message.message or "").strip()
 
@@ -344,7 +345,7 @@ async def main():
             chat_title = "TG"
 
         log.info(
-            "incoming: chat=%s chat_id=%s msg_id=%s has_photo=%s text_len=%s",
+            "📨 收到消息: 频道=%s chat_id=%s msg_id=%s 有图=%s 文本长度=%s",
             chat_title,
             ev.chat_id,
             message.id,
@@ -363,11 +364,11 @@ async def main():
         try:
             m = apply_transforms(m, rules)
         except Exception:
-            log.exception("apply_transforms failed")
+            log.exception("❌ 文本清洗失败")
             return
 
         if m is None:
-            log.info("dropped by rules: chat_id=%s msg_id=%s", ev.chat_id, message.id)
+            log.info("🚫 消息被规则过滤: chat_id=%s msg_id=%s", ev.chat_id, message.id)
             return
 
         # 仅发送清洗后的正文（不加 [TG:xxx] / 时间头）
@@ -377,7 +378,7 @@ async def main():
         waited_seconds = await send_limiter.wait_for_slot()
         if waited_seconds > 0:
             log.info(
-                "send_delay_applied chat_id=%s msg_id=%s waited_seconds=%.2f min_interval_seconds=%.2f",
+                "⏱️ 发送延迟: chat_id=%s msg_id=%s 等待=%.2fs 最小间隔=%.2fs",
                 ev.chat_id,
                 message.id,
                 waited_seconds,
@@ -388,7 +389,7 @@ async def main():
             try:
                 img_bytes = await client.download_media(message.photo, bytes)
             except Exception:
-                log.exception("download photo failed")
+                log.exception("❌ 图片下载失败")
                 img_bytes = None
 
             if img_bytes:
@@ -473,14 +474,14 @@ async def main():
                         if any_send_success:
                             try:
                                 dedup.mark(dkey)
-                                log.debug("dedup marked on success: %s", dkey)
+                                log.debug("✅ 去重已标记: %s", dkey)
                             except Exception:
-                                log.exception("dedup mark-on-success failed (ignored)")
+                                log.exception("⚠️ 去重标记失败 (已忽略)")
                         else:
-                            log.warning("all sends failed, dedup not marked: %s", dkey)
+                            log.warning("⚠️ 所有群发送失败，未标记去重: %s", dkey)
                     return
                 except Exception:
-                    log.exception("prepare image message failed")
+                    log.exception("❌ 图片消息准备失败")
                     return
 
         # 无图：多群发送，单群失败不影响其它群
@@ -518,13 +519,13 @@ async def main():
             if any_send_success:
                 try:
                     dedup.mark(dkey)
-                    log.debug("dedup marked on success: %s", dkey)
+                    log.debug("✅ 去重已标记: %s", dkey)
                 except Exception:
-                    log.exception("dedup mark-on-success failed (ignored)")
+                    log.exception("⚠️ 去重标记失败 (已忽略)")
             else:
-                log.warning("all sends failed, dedup not marked: %s", dkey)
+                log.warning("⚠️ 所有群发送失败，未标记去重: %s", dkey)
 
-    log.info("tg2qq forwarder running (listening)")
+    log.info("🎧 TG→QQ 转发器运行中 (监听消息)")
     await client.run_until_disconnected()
 
 
